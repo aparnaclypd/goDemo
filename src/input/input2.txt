@@ -1,0 +1,2 @@
+srcImage.png output2.jpg
+sharpness 3
