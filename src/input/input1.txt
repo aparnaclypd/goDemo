@@ -1,4 +1,0 @@
-srcImage.png output1.jpg
-Blur 2
-Grayscale
-rotate 90

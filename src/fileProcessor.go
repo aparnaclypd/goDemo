@@ -1,82 +1,100 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
-	"io/ioutil"
+	"image"
+	"log"
+	"os"
 	"strconv"
 	"strings"
 
-	"github.com/disintegration/imaging"
-
 	"./helper"
+
+	"github.com/disintegration/imaging"
 )
 
-func readFile(fileName string, hasFinished chan bool) {
+type imageProcessorModel struct {
+	srcImgName, destImgName string
+	effects                 []string
+}
 
-	bytes, errr := ioutil.ReadFile(fileName)
-	logHelper.LogError(errr, "Could not open input file!")
+func readInputFile(fileName string) {
+	file, err := os.Open(fileName)
 
-	linesInFile := strings.Split(string(bytes), "\n")
+	if err != nil {
+		log.Fatal(err)
+		panic("Could not open input file.")
+	}
 
-	processEffects(linesInFile)
+	defer file.Close()
 
-	hasFinished <- true
+	scanner := bufio.NewScanner(file)
+
+	var hasFinished = make(chan bool)
+	var processedAllFiles = true
+
+	for scanner.Scan() {
+
+		newImageToBeProcessed := setDefaultValuesForModel(scanner.Text())
+
+		scanner.Scan()
+
+		for strings.TrimSpace(string(scanner.Text())) != "" {
+			newImageToBeProcessed.effects = append(newImageToBeProcessed.effects, scanner.Text())
+			scanner.Scan()
+		}
+
+		go processEffects(newImageToBeProcessed, hasFinished)
+		processedAllFiles = processedAllFiles && <-hasFinished
+	}
+
+	if processedAllFiles {
+		fmt.Println("Successfuly processed all images!")
+	} else {
+		fmt.Println("Could not process all images!")
+	}
 
 }
 
-func processEffects(linesInFile []string) {
+func processEffects(newImageToBeProcessed imageProcessorModel, hasFinished chan bool) {
 
-	fileNames := strings.Split(linesInFile[0], " ")
-
-	srcFileName := fileNames[0]
-	destFileName := fileNames[1]
-
-	srcImg, er := imaging.Open("./images/" + srcFileName)
+	srcImg, er := imaging.Open("./images/" + newImageToBeProcessed.srcImgName)
 	logHelper.LogError(er, "Could not open file")
 
 	//Create output image in standard size
-	destImg := imaging.CropAnchor(srcImg, 350, 350, imaging.Center)
-	destImg = imaging.Resize(destImg, 256, 0, imaging.Lanczos)
+	destImg := standardizeImage(srcImg)
 
 	//Start scanning effects and their values from file
-	for index := 1; strings.TrimSpace(string(linesInFile[index])) != ""; index++ {
+	for _, line := range newImageToBeProcessed.effects {
 
-		scannedTokens := strings.Split(linesInFile[index], " ")
+		effectNameValue := strings.Split(line, " ")
 
-		var effect Effect
 		var value float64
 
-		if len(scannedTokens) > 1 {
-			value, _ = strconv.ParseFloat(scannedTokens[1], 64)
+		if len(effectNameValue) > 1 {
+			value, _ = strconv.ParseFloat(effectNameValue[1], 64)
 		}
 
-		switch strings.ToLower(scannedTokens[0]) {
+		destImg = applyEffect(effectNameValue[0], value, destImg)
 
-		case "blur":
-			effect = blur{value}
-			break
-
-		case "rotate":
-			effect = rotate{value}
-			break
-
-		case "contrast":
-			effect = contrast{value}
-			break
-
-		case "grayscale":
-			effect = grayscale{}
-			break
-
-		case "sharpness":
-			effect = sharpness{value}
-			break
-		}
-
-		//Apply effect
-		destImg = effect.apply(destImg)
 	}
-	err := imaging.Save(destImg, "./images/"+destFileName)
+
+	err := imaging.Save(destImg, "./images/"+newImageToBeProcessed.destImgName)
 	logHelper.LogError(err, "Couldn't create output file.")
-	fmt.Println("Created file : " + destFileName)
+	fmt.Println("Created file : " + newImageToBeProcessed.destImgName)
+	hasFinished <- true
+}
+
+func standardizeImage(srcImg image.Image) image.Image {
+	destImg := imaging.CropAnchor(srcImg, 350, 350, imaging.Center)
+	return imaging.Resize(destImg, 256, 0, imaging.Lanczos)
+}
+
+func setDefaultValuesForModel(scannedText string) imageProcessorModel {
+	newImageToBeProcessed := imageProcessorModel{}
+	fileNames := strings.Split(scannedText, " ")
+	newImageToBeProcessed.srcImgName = fileNames[0]
+	newImageToBeProcessed.destImgName = fileNames[1]
+	return newImageToBeProcessed
 }

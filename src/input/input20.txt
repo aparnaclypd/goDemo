@@ -1,3 +1,0 @@
-srcImage.png output20.jpg
-sharpness 3
-contrast 40

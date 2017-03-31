@@ -2,6 +2,7 @@ package main
 
 import (
 	"image"
+	"strings"
 
 	"github.com/disintegration/imaging"
 )
@@ -54,4 +55,35 @@ func (g grayscale) apply(destImg image.Image) *image.NRGBA {
 
 func (s sharpness) apply(destImg image.Image) *image.NRGBA {
 	return imaging.Sharpen(destImg, s.value)
+}
+
+func applyEffect(effectName string, value float64, destImg image.Image) *image.NRGBA {
+
+	var effect Effect
+
+	switch strings.ToLower(effectName) {
+
+	case "blur":
+		effect = blur{value}
+		break
+
+	case "rotate":
+		effect = rotate{value}
+		break
+
+	case "contrast":
+		effect = contrast{value}
+		break
+
+	case "grayscale":
+		effect = grayscale{}
+		break
+
+	case "sharpness":
+		effect = sharpness{value}
+		break
+	}
+
+	//Apply effect
+	return effect.apply(destImg)
 }
