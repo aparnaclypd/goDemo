@@ -1,0 +1,13 @@
+srcImage.png output1.jpg
+Blur 2
+Grayscale
+rotate 90
+
+srcImage.png output10.jpg
+Grayscale
+
+srcImage.png output100.jpg
+rotate 90
+
+srcImage.png output1000.jpg
+Blur 2
