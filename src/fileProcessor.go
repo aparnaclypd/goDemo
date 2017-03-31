@@ -24,23 +24,22 @@ func readInputFile(fileName string) {
 
 	if err != nil {
 		log.Fatal(err)
+		panic("Could not open input file.")
 	}
 
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
 
-	var newImageToBeProcessed imageProcessorModel
 	var hasFinished = make(chan bool)
 	var processedAllFiles = true
 
 	for scanner.Scan() {
-		newImageToBeProcessed = imageProcessorModel{}
-		fileNames := strings.Split(scanner.Text(), " ")
-		newImageToBeProcessed.srcImgName = fileNames[0]
-		newImageToBeProcessed.destImgName = fileNames[1]
+
+		newImageToBeProcessed := setDefaultValuesForModel(scanner.Text())
 
 		scanner.Scan()
+
 		for strings.TrimSpace(string(scanner.Text())) != "" {
 			newImageToBeProcessed.effects = append(newImageToBeProcessed.effects, scanner.Text())
 			scanner.Scan()
@@ -90,4 +89,12 @@ func processEffects(newImageToBeProcessed imageProcessorModel, hasFinished chan 
 func standardizeImage(srcImg image.Image) image.Image {
 	destImg := imaging.CropAnchor(srcImg, 350, 350, imaging.Center)
 	return imaging.Resize(destImg, 256, 0, imaging.Lanczos)
+}
+
+func setDefaultValuesForModel(scannedText string) imageProcessorModel {
+	newImageToBeProcessed := imageProcessorModel{}
+	fileNames := strings.Split(scannedText, " ")
+	newImageToBeProcessed.srcImgName = fileNames[0]
+	newImageToBeProcessed.destImgName = fileNames[1]
+	return newImageToBeProcessed
 }
