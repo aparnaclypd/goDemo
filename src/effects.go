@@ -7,8 +7,6 @@ import (
 	"github.com/disintegration/imaging"
 )
 
-/*Effect is an interface with 'apply' method with pointer receivers
-to the effect that implements it*/
 type Effect interface {
 	apply(image.Image) *image.NRGBA
 }

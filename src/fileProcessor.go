@@ -8,8 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
-
-	"./helper"
+	"sync"
 
 	"github.com/disintegration/imaging"
 )
@@ -19,48 +18,69 @@ type imageProcessorModel struct {
 	effects                 []string
 }
 
-func readInputFile(fileName string) {
+func readInputFile(fileName string) error {
 	file, err := os.Open(fileName)
-
 	if err != nil {
 		log.Fatal(err)
-		panic("Could not open input file.")
+		return NewCouldNotOpenFileError("Could not open file!")
 	}
 
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
+	var wg sync.WaitGroup
+	var processNextLine = true
 
-	var hasFinished = make(chan bool)
-	var processedAllFiles = true
+	for processNextLine {
 
-	for scanner.Scan() {
+		processNextLine = scanner.Scan()
+		if !processNextLine {
+			err := scanner.Err()
+			if err == nil {
+				return NewScanInputFileError("No data present in input file")
+			}
+			return NewScanInputFileError(err.Error())
+		}
 
 		newImageToBeProcessed := setDefaultValuesForModel(scanner.Text())
 
-		scanner.Scan()
+		processNextLine = scanner.Scan()
+		if !processNextLine {
+			err := scanner.Err()
+			if err == nil {
+				return NewScanInputFileError(fmt.Sprintf("No Effects provided for %s - %s combo.", newImageToBeProcessed.srcImgName, newImageToBeProcessed.destImgName))
+			}
+			return NewScanInputFileError(err.Error())
+		}
 
 		for strings.TrimSpace(string(scanner.Text())) != "" {
 			newImageToBeProcessed.effects = append(newImageToBeProcessed.effects, scanner.Text())
-			scanner.Scan()
+
+			processNextLine = scanner.Scan()
+			if !processNextLine {
+				err := scanner.Err()
+				if err == nil {
+					break
+				}
+				return NewScanInputFileError(err.Error())
+			}
 		}
-
-		go processEffects(newImageToBeProcessed, hasFinished)
-		processedAllFiles = processedAllFiles && <-hasFinished
+		wg.Add(1)
+		go processEffects(newImageToBeProcessed, &wg)
 	}
 
-	if processedAllFiles {
-		fmt.Println("Successfuly processed all images!")
-	} else {
-		fmt.Println("Could not process all images!")
-	}
-
+	wg.Wait()
+	return nil
 }
 
-func processEffects(newImageToBeProcessed imageProcessorModel, hasFinished chan bool) {
+func processEffects(newImageToBeProcessed imageProcessorModel, wg *sync.WaitGroup) {
 
-	srcImg, er := imaging.Open("./images/" + newImageToBeProcessed.srcImgName)
-	logHelper.LogError(er, "Could not open file")
+	srcImg, err := imaging.Open("./images/" + newImageToBeProcessed.srcImgName)
+	if err != nil {
+		log.Fatal(err)
+		//msg := fmt.Sprintf("Could not open image: %s.", newImageToBeProcessed.srcImgName)
+		//return NewCouldNotOpenFileError(msg)
+	}
 
 	//Create output image in standard size
 	destImg := standardizeImage(srcImg)
@@ -73,17 +93,24 @@ func processEffects(newImageToBeProcessed imageProcessorModel, hasFinished chan 
 		var value float64
 
 		if len(effectNameValue) > 1 {
-			value, _ = strconv.ParseFloat(effectNameValue[1], 64)
+			value, err = strconv.ParseFloat(effectNameValue[1], 64)
+			if err != nil {
+				//return NewScanValueError(fmt.Sprintf("Invalid input value : %s", effectNameValue[1]))
+			}
 		}
 
 		destImg = applyEffect(effectNameValue[0], value, destImg)
 
 	}
 
-	err := imaging.Save(destImg, "./images/"+newImageToBeProcessed.destImgName)
-	logHelper.LogError(err, "Couldn't create output file.")
+	err = imaging.Save(destImg, "./images/"+newImageToBeProcessed.destImgName)
+	if err != nil {
+		log.Fatal(err)
+		//		return NewCouldNotOpenFileError("Could not save output file: %s. Errors: %s", newImageToBeProcessed.destImgName, err.Error())
+	}
+
 	fmt.Println("Created file : " + newImageToBeProcessed.destImgName)
-	hasFinished <- true
+	wg.Done()
 }
 
 func standardizeImage(srcImg image.Image) image.Image {
